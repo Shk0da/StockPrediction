@@ -1,3 +1,4 @@
-FROM tomcat
-RUN mkdir /usr/local/tomcat/webapps/myapp
-COPY personaldata.war /usr/local/tomcat/webapps/personaldata.war
+FROM openjdk:8-jdk-alpine
+VOLUME /tmp
+ADD stockpredictionapplication.jar stockpredictionapplication.jar
+ENTRYPOINT exec java -Djava.security.egd=file:/dev/./urandom -jar /stockpredictionapplication.jar
