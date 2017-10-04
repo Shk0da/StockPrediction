@@ -1,5 +1,6 @@
 package com.github.shk0da.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -24,6 +25,7 @@ public class Tick implements Serializable {
     public static class PK implements Serializable {
         private Timestamp datetime;
         private String symbol;
+        private Integer timeFrame;
     }
 
     @Id
@@ -35,6 +37,11 @@ public class Tick implements Serializable {
     @NotNull
     @Column(name = "symbol", columnDefinition = "varchar(10)")
     private String symbol;
+
+    @Id
+    @NotNull
+    @Column(name = "time_frame")
+    private Integer timeFrame;
 
     @NotNull
     @Column(name = "open")
@@ -56,7 +63,7 @@ public class Tick implements Serializable {
     @Column(name = "value")
     private Double value;
 
-    @NotNull
+    @JsonIgnore
     @Column(name = "normalization")
     private Double normalization;
 }
