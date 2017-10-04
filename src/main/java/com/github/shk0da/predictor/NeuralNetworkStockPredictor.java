@@ -149,7 +149,7 @@ public class NeuralNetworkStockPredictor {
 
     private DataSet loadTrainingData(String symbol) {
         DataSet trainingSet = new DataSet(SLIDING_WINDOWS_SIZE, 1);
-        List<Tick> ticks = tickRepository.findTop10000BySymbolOrderByDatetimeAsc(symbol);
+        List<Tick> ticks = tickRepository.findAllBySymbolAndDatetimeIsBetweenOrderByDatetimeAsc(symbol, getStart(), getEnd());
         int lineSize = SLIDING_WINDOWS_SIZE;
         int linesSize = ticks.size() / lineSize;
         Double[][] tickLines = new Double[linesSize + 1][lineSize];

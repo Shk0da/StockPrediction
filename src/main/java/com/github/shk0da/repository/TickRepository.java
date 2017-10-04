@@ -8,7 +8,6 @@ import java.util.List;
 
 public interface TickRepository extends JpaRepository<Tick, Tick.PK> {
     List<Tick> findAllBySymbolAndDatetimeIsBetweenOrderByDatetimeAsc(String symbol, Timestamp start, Timestamp end);
-    List<Tick> findTop10000BySymbolOrderByDatetimeAsc(String symbol);
     Tick findFirstBySymbolAndDatetimeBetweenOrderByOpenDesc(String symbol, Timestamp start, Timestamp end);
     Tick findFirstBySymbolAndDatetimeBetweenOrderByOpenAsc(String symbol, Timestamp start, Timestamp end);
     Tick findFirstBySymbolAndDatetimeBetweenOrderByCloseDesc(String symbol, Timestamp start, Timestamp end);
