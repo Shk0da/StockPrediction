@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.List;
@@ -33,10 +32,12 @@ public class NeuralNetworkStockPredictor {
     private static final long YEAR_MLS = 31556926000L;
     private static final int SLIDING_WINDOWS_SIZE = 5;
 
+    private static Map<String, NeuralNetwork> neuralNetworkMap = new ConcurrentHashMap<>();
     private static Map<String, Map<String, Double>> minMax = new ConcurrentHashMap<>();
     private static Map<String, Long> locker = new ConcurrentHashMap<>();
 
     public void addTick(Tick tick) {
+        if (tick == null) return;
         Double normalize = normalizeValue(tick);
         if (normalize > 0 && normalize < Double.MAX_VALUE
                 && normalize != Double.NaN
@@ -47,28 +48,20 @@ public class NeuralNetworkStockPredictor {
     }
 
     public Double getPrediction(String symbol) {
+        Map<String, Double> minmax = minMax.getOrDefault(symbol, null);
+        if (minmax == null) return 0.0;
+
         trainNetwork(symbol);
         NeuralNetwork neuralNetwork = getNeuralNetwork(symbol);
         neuralNetwork.calculate();
         double[] networkOutput = neuralNetwork.getOutput();
-        Map<String, Double> minmax = minMax.getOrDefault(symbol, null);
-        return (minmax == null)
-                ? 0.0
-                : deNormalizeValue(networkOutput[0], minMax.get(symbol).get("min"), minMax.get(symbol).get("max"));
+        return deNormalizeValue(networkOutput[0], minmax.get("min"), minmax.get("max"));
     }
 
     private NeuralNetwork getNeuralNetwork(String symbol) {
-        String path = getNeuralNetworkModelFilePath(symbol);
-        File neuralNetworkFile = new File(path);
-        if (neuralNetworkFile.exists() && !neuralNetworkFile.isDirectory()) {
-            return NeuralNetwork.createFromFile(getNeuralNetworkModelFilePath(symbol));
-        }
-
-        return new MultiLayerPerceptron(SLIDING_WINDOWS_SIZE, 2 * SLIDING_WINDOWS_SIZE + 1, 1);
-    }
-
-    private String getNeuralNetworkModelFilePath(String symbol) {
-        return "stockPredictor-" + symbol + ".nnet";
+        return neuralNetworkMap.getOrDefault(
+                symbol,
+                new MultiLayerPerceptron(SLIDING_WINDOWS_SIZE, 2 * SLIDING_WINDOWS_SIZE + 1, 1));
     }
 
     private Timestamp getStart() {
@@ -79,37 +72,57 @@ public class NeuralNetworkStockPredictor {
         return new Timestamp(System.currentTimeMillis());
     }
 
+    private String getRealSymbol(final String symbol) {
+        return symbol.replaceAll("\\d","");
+    }
+
+    private Integer getTF(final String symbol) {
+        String tf = symbol.replaceAll("[^\\d.]", "");
+        return (tf == null || tf.isEmpty()) ? 0 : Integer.valueOf(tf);
+    }
+
     private Double getOpenMax(String symbol) {
-        Tick tick = tickRepository.findFirstBySymbolAndDatetimeBetweenOrderByOpenDesc(symbol, getStart(), getEnd());
+        Tick tick = tickRepository.findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByOpenDesc(
+                        getRealSymbol(symbol), getTF(symbol), getStart(), getEnd()
+                );
         return tick == null ? 0D : tick.getOpen();
     }
 
     private Double getOpenMin(String symbol) {
-        Tick tick = tickRepository.findFirstBySymbolAndDatetimeBetweenOrderByOpenAsc(symbol, getStart(), getEnd());
+        Tick tick = tickRepository.findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByOpenAsc(
+                getRealSymbol(symbol), getTF(symbol), getStart(), getEnd()
+        );
         return tick == null ? 0D : tick.getOpen();
     }
 
     private Double getCloseMax(String symbol) {
-        Tick tick = tickRepository.findFirstBySymbolAndDatetimeBetweenOrderByCloseDesc(symbol, getStart(), getEnd());
+        Tick tick = tickRepository.findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByCloseDesc(
+                getRealSymbol(symbol), getTF(symbol), getStart(), getEnd()
+        );
         return tick == null ? 0D : tick.getClose();
     }
 
     private Double getCloseMin(String symbol) {
-        Tick tick = tickRepository.findFirstBySymbolAndDatetimeBetweenOrderByCloseAsc(symbol, getStart(), getEnd());
+        Tick tick = tickRepository.findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByCloseAsc(
+                getRealSymbol(symbol), getTF(symbol), getStart(), getEnd()
+        );
         return tick == null ? 0D : tick.getClose();
     }
 
     private double normalizeValue(Tick tick) {
-        Double min = getCloseMin(tick.getSymbol());
-        Double max = getCloseMax(tick.getSymbol());
-        minMax.put(tick.getSymbol(), new HashMap<String, Double>() {
+        Double min = getCloseMin(tick.getSymbol()+tick.getTimeFrame());
+        Double max = getCloseMax(tick.getSymbol()+tick.getTimeFrame());
+        minMax.put(tick.getSymbol()+tick.getTimeFrame(), new HashMap<String, Double>() {
             {
                 put("min", (min > 0 && !max.equals(min)) ? min : tick.getMin());
                 put("max", (max > 0 && !max.equals(min)) ? max : tick.getMax());
             }
         });
-        return normalizeValue(tick.getClose(), minMax.get(tick.getSymbol()).get("min"),
-                minMax.get(tick.getSymbol()).get("max"));
+        return normalizeValue(
+                tick.getClose(),
+                minMax.get(tick.getSymbol()+tick.getTimeFrame()).getOrDefault("min", 0D),
+                minMax.get(tick.getSymbol()+tick.getTimeFrame()).getOrDefault("max", 1D)
+        );
     }
 
     private double normalizeValue(double input, double min, double max) {
@@ -143,13 +156,15 @@ public class NeuralNetworkStockPredictor {
         DataSet trainingSet = loadTrainingData(symbol);
         if (trainingSet == null) return;
         neuralNetwork.learn(trainingSet);
-        neuralNetwork.save(getNeuralNetworkModelFilePath(symbol));
+        neuralNetworkMap.put(symbol, neuralNetwork);
         locker.remove(symbol);
     }
 
     private DataSet loadTrainingData(String symbol) {
         DataSet trainingSet = new DataSet(SLIDING_WINDOWS_SIZE, 1);
-        List<Tick> ticks = tickRepository.findAllBySymbolAndDatetimeIsBetweenOrderByDatetimeAsc(symbol, getStart(), getEnd());
+        List<Tick> ticks = tickRepository.findAllBySymbolAndTimeFrameAndDatetimeIsBetweenOrderByDatetimeAsc(
+                getRealSymbol(symbol), getTF(symbol), getStart(), getEnd()
+        );
         int lineSize = SLIDING_WINDOWS_SIZE;
         int linesSize = ticks.size() / lineSize;
         Double[][] tickLines = new Double[linesSize + 1][lineSize];

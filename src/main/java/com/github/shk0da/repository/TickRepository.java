@@ -7,9 +7,9 @@ import java.sql.Timestamp;
 import java.util.List;
 
 public interface TickRepository extends JpaRepository<Tick, Tick.PK> {
-    List<Tick> findAllBySymbolAndDatetimeIsBetweenOrderByDatetimeAsc(String symbol, Timestamp start, Timestamp end);
-    Tick findFirstBySymbolAndDatetimeBetweenOrderByOpenDesc(String symbol, Timestamp start, Timestamp end);
-    Tick findFirstBySymbolAndDatetimeBetweenOrderByOpenAsc(String symbol, Timestamp start, Timestamp end);
-    Tick findFirstBySymbolAndDatetimeBetweenOrderByCloseDesc(String symbol, Timestamp start, Timestamp end);
-    Tick findFirstBySymbolAndDatetimeBetweenOrderByCloseAsc(String symbol, Timestamp start, Timestamp end);
+    List<Tick> findAllBySymbolAndTimeFrameAndDatetimeIsBetweenOrderByDatetimeAsc(String symbol, Integer tf, Timestamp start, Timestamp end);
+    Tick findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByOpenDesc(String symbol, Integer tf, Timestamp start, Timestamp end);
+    Tick findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByOpenAsc(String symbol, Integer tf, Timestamp start, Timestamp end);
+    Tick findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByCloseDesc(String symbol, Integer tf, Timestamp start, Timestamp end);
+    Tick findFirstBySymbolAndTimeFrameAndDatetimeBetweenOrderByCloseAsc(String symbol, Integer tf, Timestamp start, Timestamp end);
 }
